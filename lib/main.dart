@@ -7,6 +7,7 @@ import 'package:vibration/vibration.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart';
 
 
 // modelos e telas
@@ -113,10 +114,112 @@ class HomeScreen extends StatefulWidget {
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
+class LocationService {
+  final Location _location = Location();
 
+  Future<LatLng> getCurrentLocation() async {
+    bool serviceEnabled;
+    PermissionStatus permissionGranted;
+
+    // Verifica se o serviço de localização está habilitado
+    serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) {
+        throw Exception('Serviço de localização desabilitado.');
+      }
+    }
+
+    // Verifica se a permissão de localização foi concedida
+    permissionGranted = await _location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await _location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) {
+        throw Exception('Permissão de localização negada.');
+      }
+    }
+
+    // Obtém a localização atual
+    final locationData = await _location.getLocation();
+    return LatLng(locationData.latitude!, locationData.longitude!);
+  }
+}
 class _HomeScreenState extends State<HomeScreen> {
   bool _monitoring = false;
   late StreamSubscription<AccelerometerEvent> _accelSub;
+  final Location _location = Location();
+  LatLng _currentPosition = const LatLng(-23.5505, -46.6333); // Posição inicial (São Paulo)
+  late GoogleMapController _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    try {
+      // Verifica se o serviço de localização está habilitado
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) {
+          print('Serviço de localização desabilitado.');
+          return;
+        }
+      }
+
+      // Verifica permissões de localização
+      PermissionStatus permissionGranted = await _location.hasPermission();
+      if (permissionGranted == PermissionStatus.denied) {
+        permissionGranted = await _location.requestPermission();
+        if (permissionGranted != PermissionStatus.granted) {
+          print('Permissão de localização negada.');
+          return;
+        }
+      }
+
+      // Obtém a localização inicial
+      final location = await _location.getLocation();
+      setState(() {
+        _currentPosition = LatLng(location.latitude!, location.longitude!);
+      });
+
+      // Move a câmera para a localização inicial
+      _mapController.animateCamera(
+        CameraUpdate.newLatLng(_currentPosition),
+      );
+
+      // Começa a ouvir mudanças de localização
+      _listenToLocationChanges();
+    } catch (e) {
+      print('Erro ao obter localização: $e');
+    }
+  }
+
+  void _listenToLocationChanges() {
+    _location.onLocationChanged.listen((location) {
+      setState(() {
+        _currentPosition = LatLng(location.latitude!, location.longitude!);
+      });
+
+      // Atualiza a câmera do mapa
+      _mapController.animateCamera(
+        CameraUpdate.newLatLng(_currentPosition),
+      );
+    });
+  }
+
+  void _toggleMonitoring() {
+    setState(() {
+      _monitoring = !_monitoring;
+    });
+  }
+
+  void _triggerSOS() {
+    print('SOS acionado!');
+    // Lógica para acionar SOS
+  }
 
   @override
   void dispose() {
@@ -124,145 +227,72 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _triggerSOS() {
-    // lógica de acionamento automático do SOS
-    print('SOS acionado automaticamente');
-    // Aqui você pode chamar a função de gravação ou envio de alerta
-  }
-
-  void _onImpactDetected(double magnitude) {
-    if (!_monitoring) return;
-    setState(() => _monitoring = false);
-    _accelSub.cancel();
-
-    bool responded = false;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Impacto Detectado'),
-        content: Text(
-            'Um impacto de \$magnitude m/s² foi detectado. Está tudo bem?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              responded = true;
-              Navigator.of(context).pop();
-            },
-            child: const Text('Estou bem'),
-          ),
-        ],
-      ),
-    );
-
-    // Aguarda 30 segundos pela resposta do usuário
-    Future.delayed(const Duration(seconds: 30), () async {
-      if (!responded) {
-        // Vibra três vezes
-        if (await Vibration.hasVibrator() ?? false) {
-          for (int i = 0; i < 3; i++) {
-            Vibration.vibrate(duration: 500);
-            await Future.delayed(const Duration(seconds: 1));
-          }
-        }
-        Navigator.of(context).pop(); // fecha dialog
-        _triggerSOS();
-      }
-    });
-  }
-
-  void _toggleMonitoring() {
-    setState(() => _monitoring = !_monitoring);
-
-    if (_monitoring) {
-      _accelSub = accelerometerEvents.listen((event) {
-        final double sumOfSquares =
-            event.x * event.x + event.y * event.y + event.z * event.z;
-        final double magnitude = sqrt(sumOfSquares);
-        if (magnitude > 25) {
-          _onImpactDetected(magnitude);
-        }
-      });
-    } else {
-      _accelSub.cancel();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final double elementHeight = kToolbarHeight;
-    final double sosButtonHeight = elementHeight * 2.5;
-
     return Column(
       children: [
-        SizedBox(
-          height: elementHeight,
-          child: SafeArea(
-            bottom: false,
-            child: Center(
-              child: Image.asset(
-                'assets/guardiansoslogo.png',
-                height: elementHeight * 0.8,
-              ),
-            ),
-          ),
-        ),
+        // Botões e outros widgets
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: SizedBox(
-            height: elementHeight,
-            width: double.infinity,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _toggleMonitoring,
-                  icon: Icon(
-                    _monitoring ? Icons.pause_circle : Icons.play_circle,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    _monitoring ? 'Parar Monitoramento' : 'Ativar Monitoramento',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _monitoring ? Colors.grey : Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _toggleMonitoring,
+                icon: Icon(
+                  _monitoring ? Icons.pause_circle : Icons.play_circle,
+                  color: Colors.white,
+                  size: 30, 
+                ),
+                label: Text(
+                  _monitoring ? 'Parar' : 'Monitorar',
+                  style: const TextStyle(fontSize: 20), 
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20), // Aumenta o tamanho do botão
+                  backgroundColor: _monitoring ? Colors.grey : Colors.blue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), // Bordas levemente arredondadas
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Lógica do botão SOS
-                    print('Botão SOS pressionado');
-                    _triggerSOS();
-                  },
-                  icon: const Icon(
-                    Icons.warning,
-                    color: Colors.white,
-                  ),
-                  label: const Text(
-                    'SOS',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  print('Botão SOS pressionado');
+                  _triggerSOS();
+                },
+                icon: const Icon(
+                  Icons.warning,
+                  color: Colors.white,
+                  size: 30, // Aumenta o tamanho do ícone
+                ),
+                label: const Text(
+                  'SOS',
+                  style: TextStyle(fontSize: 20), // Aumenta o tamanho do texto
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20), // Aumenta o tamanho do botão
+                  backgroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), // Bordas levemente arredondadas
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+        // Mapa ocupa o restante do espaço
         Expanded(
           child: GoogleMap(
             initialCameraPosition: CameraPosition(
-              target: LatLng(-23.5505, -46.6333), // Coordenadas iniciais (São Paulo, por exemplo)
+              target: _currentPosition,
               zoom: 12,
             ),
+            onMapCreated: (GoogleMapController controller) {
+              _mapController = controller;
+            },
+            myLocationEnabled: true, // Mostra o ponto azul da localização
+            myLocationButtonEnabled: true, // Botão para centralizar no local
           ),
         ),
       ],
