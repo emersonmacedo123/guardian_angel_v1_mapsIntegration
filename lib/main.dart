@@ -5,6 +5,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:vibration/vibration.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 
 // modelos e telas
 import 'profile_model.dart';
@@ -209,49 +212,56 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SizedBox(
             height: elementHeight,
             width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _toggleMonitoring,
-              icon: Icon(
-                _monitoring ? Icons.pause_circle : Icons.play_circle,
-                color: Colors.white,
-              ),
-              label: Text(
-                _monitoring ? 'Parar Monitoramento' : 'Ativar Monitoramento',
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _monitoring ? Colors.grey : Colors.blue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _toggleMonitoring,
+                  icon: Icon(
+                    _monitoring ? Icons.pause_circle : Icons.play_circle,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _monitoring ? 'Parar Monitoramento' : 'Ativar Monitoramento',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _monitoring ? Colors.grey : Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: SizedBox(
-                height: sosButtonHeight,
-                width: MediaQuery.of(context).size.width * 0.6,
-                child: ElevatedButton.icon(
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Lógica do botão SOS
+                    print('Botão SOS pressionado');
+                    _triggerSOS();
+                  },
+                  icon: const Icon(
+                    Icons.warning,
+                    color: Colors.white,
+                  ),
+                  label: const Text(
+                    'SOS',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  icon: const Icon(Icons.warning, color: Colors.white),
-                  label: const Text(
-                    'SOS',
-                    style: TextStyle(color: Colors.white, fontSize: 24),
-                  ),
-                  onPressed: () {
-                    _triggerSOS();
-                  },
                 ),
-              ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: LatLng(-23.5505, -46.6333), // Coordenadas iniciais (São Paulo, por exemplo)
+              zoom: 12,
             ),
           ),
         ),

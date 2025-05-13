@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  google_maps_flutter: ^2.12.1
 
   # Hive para storage local
   hive: ^2.2.3
